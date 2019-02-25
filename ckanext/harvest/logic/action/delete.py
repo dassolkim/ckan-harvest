@@ -28,3 +28,19 @@ def harvest_source_delete(context, data_dict):
 
         p.toolkit.get_action('harvest_source_clear')(
             context, {'id': package_dict['id']})
+
+    # Add automatic harvest_source_job_history_clear
+    #
+    # log.info('finish clear source')
+    # p.toolkit.get_action('harvest_source_job_history_clear')(
+    #     context, {'id': package_dict['id']})
+    # log.info('finish harvest_source_job_history_clear')
+
+    # model = context['model']
+    # sql = '''begin;
+    #     delete from harvest_source where id='{harvest_source_id}';
+    #     commit;
+    #     '''.format(harvest_source_id=package_dict['id'])
+    # log.info('delete harvest source in harvest_source table')
+    # model.Session.execute(sql)
+    # log.info('finish delete harvest source in db')

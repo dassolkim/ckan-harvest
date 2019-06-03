@@ -35,8 +35,6 @@
         {{ _('Clear') }}
       </a>
 
-
-
        <a href="{{ h.url_for('{0}_read'.format(c.dataset_type), id=harvest_source.id) }}" class="btn btn-default">
         <i class="fa fa-eye eye-open"></i>
         {{ _('View harvest source') }}
@@ -62,3 +60,4 @@
   {{ h.build_nav_icon('harvest_job_list'.format(c.dataset_type), _('Jobs'), source=harvest_source.name, icon='reorder') }}
   {{ h.build_nav_icon('{0}_edit'.format(c.dataset_type), _('Edit'), id=harvest_source.name, icon='edit') }}
 {% endblock %}
+

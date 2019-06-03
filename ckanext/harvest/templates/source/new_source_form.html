@@ -107,6 +107,11 @@
           {{ _('Delete and clear source') }}
         </a>
       </li>
+      <li>
+        <a href="{% url_for 'harvest_delete', id=data.name %}?source_delete=True" data-module="confirm-action" data-module-i18n="{{ locale_complete_delete }}">
+          {{ _('Delete complete source') }}
+        </a>
+      </li>
     </ul>
   </div>
       {% endif %}

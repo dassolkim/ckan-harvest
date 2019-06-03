@@ -21,20 +21,33 @@ def harvest_source_delete(context, data_dict):
 
     p.toolkit.get_action('package_delete')(context, data_dict)
 
-    if context.get('clear_source', False):
+    package_dict = p.toolkit.get_action('package_show')(context, data_dict)
+    harvest_source_id = package_dict['id']
 
+    source_delete = data_dict.get('source_delete')
+    # source_dict = {'id': harvest_source_id, 'source_delete': source_delete}
+
+    # print('################################ ckanext-harvest action.delete line 30 #################################')
+    # print(context)
+    if context.get('source_delete', False):
+        harvest_source_rel_info_delete(context, {'id': harvest_source_id})
+
+    # harvest_source_rel_info_delete(context, source_dict)
+    if context.get('clear_source', False):
         # We need the id. The name won't work.
-        package_dict = p.toolkit.get_action('package_show')(context, data_dict)
 
         p.toolkit.get_action('harvest_source_clear')(
-            context, {'id': package_dict['id']})
+            context, {'id': harvest_source_id})
+        log.info('finish clear source')
 
-    # Add automatic harvest_source_job_history_clear
+    # # Add automatic harvest_source_job_history_clear
     #
-    # log.info('finish clear source')
+    # # Refresh the index for this source to update the status object
+    # p.toolkit.get_action('harvest_source_reindex')(context, {'id': harvest_source_id})
+
     # p.toolkit.get_action('harvest_source_job_history_clear')(
     #     context, {'id': package_dict['id']})
-    # log.info('finish harvest_source_job_history_clear')
+    log.info('finish harvest source history clear')
 
     # model = context['model']
     # sql = '''begin;
@@ -44,3 +57,37 @@ def harvest_source_delete(context, data_dict):
     # log.info('delete harvest source in harvest_source table')
     # model.Session.execute(sql)
     # log.info('finish delete harvest source in db')
+
+def harvest_source_rel_info_delete(context, data_dict):
+
+    harvest_source_id = data_dict['id']
+    # source_delete = data_dict['source_delete']
+    model = context['model']
+    sql = '''begin;
+            delete from harvest_object_error where harvest_object_id
+             in (select id from harvest_object where harvest_source_id = '{harvest_source_id}');
+            delete from harvest_object_extra where harvest_object_id
+             in (select id from harvest_object where harvest_source_id = '{harvest_source_id}');
+            delete from harvest_object where harvest_source_id = '{harvest_source_id}';
+            delete from harvest_gather_error where harvest_job_id
+             in (select id from harvest_job where source_id = '{harvest_source_id}');
+            delete from harvest_job where source_id = '{harvest_source_id}';
+            commit;
+            '''.format(harvest_source_id=harvest_source_id)
+
+    model.Session.execute(sql)
+
+    # Refresh the index for this source to update the status object
+    p.toolkit.get_action('harvest_source_reindex')(context, {'id': harvest_source_id})
+
+    log.info('finish harvest source history clear')
+    print('############################### check harvest_source_rel_info_delete data_dict line 93 ##################################')
+
+    sql = '''begin;
+            delete from harvest_source where id='{harvest_source_id}';
+            commit;
+            '''.format(harvest_source_id=harvest_source_id)
+    log.info('delete harvest source in harvest_source table')
+    model.Session.execute(sql)
+    log.info('finish delete harvest source in db')
+

@@ -45,10 +45,17 @@ class ViewController(BaseController):
                 u'1',
             )
 
+            context['source_delete'] = request.params.get('source_delete', '').lower() in (
+                u'true',
+                u'1',
+            )
+
             p.toolkit.get_action('harvest_source_delete')(context, {'id': id})
 
             if context['clear_source']:
                 h.flash_success(_('Harvesting source successfully cleared'))
+            elif context['source_delete']:
+                h.flash_success(_('Harvesting source successfully deleted'))
             else:
                 h.flash_success(_('Harvesting source successfully inactivated'))
 

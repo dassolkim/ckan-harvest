@@ -47,7 +47,7 @@ def harvest_source_delete(context, data_dict):
 
     # p.toolkit.get_action('harvest_source_job_history_clear')(
     #     context, {'id': package_dict['id']})
-    
+
     # log.info('finish harvest source history clear')
 
     # model = context['model']

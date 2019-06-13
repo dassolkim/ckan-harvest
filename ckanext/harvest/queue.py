@@ -83,11 +83,12 @@ def get_gather_routing_key():
 
 
 def get_fetch_routing_key():
-    return 'ckanext-harvest:{0}:harvest_object_id'.format(
-            config.get('ckan.site_id', 'default'))
+    # return 'ckanext-harvest:{0}:harvest_object_id'.format(
+    #         config.get('ckan.site_id', 'default'))
+    return 'ckanext-harvest:{0}:harvest_object_id'.format('harvest_job_id')
 
 
-def purge_queues():
+def purge_queues(job_id):
     backend = config.get('ckan.harvest.mq.type', MQ_TYPE)
     connection = get_connection()
     if backend in ('amqp', 'ampq'):
@@ -97,9 +98,10 @@ def purge_queues():
         channel.queue_purge(queue=get_fetch_queue_name())
         log.info('AMQP queue purged: %s', get_fetch_queue_name())
     elif backend == 'redis':
-        get_gather_consumer().queue_purge()
+        get_gather_consumer().gather_queue_purge()
         log.info('Redis gather queue purged')
-        get_fetch_consumer().queue_purge()
+        # get_fetch_consumer().fetch_queue_purge(job_id)
+        get_fetch_consumer().fetch_queue_delete(job_id)
         log.info('Redis fetch queue purged')
 
 
@@ -115,6 +117,7 @@ def resubmit_jobs():
 
     # fetch queue
     harvest_object_pending = redis.keys(get_fetch_routing_key() + ':*')
+
     for key in harvest_object_pending:
         date_of_key = datetime.datetime.strptime(redis.get(key),
                                                  "%Y-%m-%d %H:%M:%S.%f")
@@ -160,7 +163,6 @@ class RedisPublisher(object):
         self.routing_key = routing_key
     def send(self, body, **kw):
         value = json.dumps(body)
-        # remove if already there
         if self.routing_key == get_gather_routing_key():
             self.redis.lrem(self.routing_key, 0, value)
         self.redis.rpush(self.routing_key, value)
@@ -197,6 +199,7 @@ class RedisConsumer(object):
         # Message keys are harvest_job_id for the gather consumer and
         # harvest_object_id for the fetch consumer
         self.message_key = routing_key.split(':')[-1]
+        self.job_key = routing_key.split(':')[1]
 
     def consume(self, queue):
         while True:
@@ -208,12 +211,19 @@ class RedisConsumer(object):
     def persistance_key(self, message):
         # If you change this, make sure to update the script in `queue_purge`
         message = json.loads(message)
-        return self.routing_key + ':' + message[self.message_key]
+        if self.routing_key == get_gather_routing_key():
+            return self.routing_key + ':' + message[self.message_key]
+        else:
+            return self.routing_key + ':' + message[self.job_key] + ':' + message[self.message_key]
 
     def basic_ack(self, message):
         self.redis.delete(self.persistance_key(message))
 
-    def queue_purge(self, queue=None):
+    def del_key(self, id):
+        while True:
+            self.redis.delete
+
+    def gather_queue_purge(self, queue=None):
         '''
         Purge the consumer's queue.
 
@@ -230,7 +240,7 @@ class RedisConsumer(object):
                 if s == false then
                     break
                 end
-                local value = cjson.decode(s)
+                local value = cjson.decode(s)       
                 local id = value[message_key]
                 local persistance_key = routing_key .. ":" .. id
                 redis.call("del", persistance_key)
@@ -240,6 +250,69 @@ class RedisConsumer(object):
         '''
         script = self.redis.register_script(lua_code)
         return script(keys=[self.routing_key], args=[self.message_key])
+
+    # def fetch_queue_purge(self, job_id):
+    #     '''
+    #             Purge the fetch_consumer's queue.
+    #
+    #     '''
+    #     # Use a script to make the operation atomic
+    #     # print('###################### queue_purge line 241 check job_id #######################')
+    #     # print(job_id)
+    #     lua_code = b'''
+    #         local routing_key = KEYS[1]
+    #         local message_key = ARGV[2]
+    #         local job_key = ARGV[1]
+    #         local count = 0
+    #         while true do
+    #             local s = redis.call("lpop", routing_key)
+    #             if s == false then
+    #                 break
+    #             end
+    #             local value = cjson.decode(s)
+    #             local id = value[message_key]
+    #             local job_id = job_key
+    #             local persistance_key = routing_key .. ":" .. job_id .. ":" .."*"
+    #
+    #             redis.call("del", persistance_key)
+    #             count = count + 1
+    #         end
+    #         return count
+    #     '''
+    #     # _lua_code = b'''
+    #     #     local job_key = ARGV[1]
+    #     #     local keys
+    #     #     redis.call("KEYS", job_key)
+    #     # '''
+    #     # id = self.job_key
+    #     script = self.redis.register_script(lua_code)
+    #     return script(keys=[self.routing_key],
+    #                   args=[job_id, self.message_key])  # self.job_key, job_id what is different?
+
+    def fetch_queue_delete(self, job_id):
+
+        # fetch queue
+
+        count = 0
+        while True:
+
+            s = self.redis.blpop(self.routing_key, 10)
+            if s == None:
+                break
+            p = list(s)
+            harvest_object = p.pop(1)
+            object_dict = json.loads(harvest_object)
+            harvest_job_id = object_dict.get('harvest_job_id')
+            harvest_object_id = object_dict.get('harvest_object_id')
+            if harvest_job_id == job_id:
+                self.redis.delete(
+                    'ckanext-harvest:harvest_job_id:harvest_object_id:{0}:{1}*'.format(harvest_job_id, harvest_object_id))
+                count = count + 1
+                log.debug('Delete {0} object in fetch_queue'.format(harvest_object_id))
+
+        print('{0} objects are deleted in fetch_queue'.format(count))
+
+        log.debug('Delete {0} objects in fetch queue'.format(count))
 
     def basic_get(self, queue):
         body = self.redis.lpop(self.routing_key)
@@ -317,7 +390,7 @@ def gather_callback(channel, method, header, body):
                     len(harvest_object_ids), harvest_object_ids[:1], harvest_object_ids[-1:]))
         for id in harvest_object_ids:
             # Send the id to the fetch queue
-            publisher.send({'harvest_object_id':id})
+            publisher.send({'harvest_job_id': job.id, 'harvest_object_id': id})
         log.debug('Sent {0} objects to the fetch queue'.format(len(harvest_object_ids)))
 
     else:
@@ -325,7 +398,7 @@ def gather_callback(channel, method, header, body):
         # * remove a harvester and it still has sources that are then refreshed
         # * add a new harvester and restart CKAN but not the gather queue.
         msg = 'System error - No harvester could be found for source type %s' % job.source.type
-        err = HarvestGatherError(message=msg,job=job)
+        err = HarvestGatherError(message=msg, job=job)
         err.save()
         log.error(msg)
 

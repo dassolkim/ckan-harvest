@@ -734,7 +734,7 @@ def harvest_job_abort(context, data_dict):
             job_id = job.id
             job = get_action('harvest_job_show')(
                 context, {'id': job_id})
-
+    j_id = job['id']
     if job['status'] != 'Finished':
         # i.e. New or Running
         job_obj = HarvestJob.get(job['id'])
@@ -759,6 +759,14 @@ def harvest_job_abort(context, data_dict):
             log.info('Harvest object not changed from "%s": %s',
                      obj.state, obj.id)
     model.repo.commit_and_remove()
+
+    # add queue purge
+    #
+
+    from ckanext.harvest.queue import purge_queues
+    log.info('Harvest queue purge start...')
+    purge_queues(j_id)
+    log.info('Harvest queue purged!')
 
     job_obj = HarvestJob.get(job['id'])
     return harvest_job_dictize(job_obj, context)

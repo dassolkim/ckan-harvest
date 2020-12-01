@@ -40,25 +40,6 @@ def harvest_source_delete(context, data_dict):
             context, {'id': harvest_source_id})
         log.info('finish clear source')
 
-    # # Add automatic harvest_source_job_history_clear
-    #
-    # # Refresh the index for this source to update the status object
-    # p.toolkit.get_action('harvest_source_reindex')(context, {'id': harvest_source_id})
-
-    # p.toolkit.get_action('harvest_source_job_history_clear')(
-    #     context, {'id': package_dict['id']})
-
-    # log.info('finish harvest source history clear')
-
-    # model = context['model']
-    # sql = '''begin;
-    #     delete from harvest_source where id='{harvest_source_id}';
-    #     commit;
-    #     '''.format(harvest_source_id=package_dict['id'])
-    # log.info('delete harvest source in harvest_source table')
-    # model.Session.execute(sql)
-    # log.info('finish delete harvest source in db')
-
 def harvest_source_rel_info_delete(context, data_dict):
 
     harvest_source_id = data_dict['id']
@@ -136,8 +117,6 @@ def harvest_source_rel_info_delete(context, data_dict):
     sql += '''
         commit;
         '''
-    # model.Session.execute(sql)
-
     model.Session.execute(sql)
 
     # Refresh the index for this source to update the status object
